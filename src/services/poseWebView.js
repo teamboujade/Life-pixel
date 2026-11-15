@@ -22,7 +22,7 @@ import { FilesetResolver, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@m
 const NAMES = { 11:'left_shoulder',12:'right_shoulder',13:'left_elbow',14:'right_elbow',
   15:'left_wrist',16:'right_wrist',23:'left_hip',24:'right_hip',25:'left_knee',26:'right_knee',
   27:'left_ankle',28:'right_ankle', 0:'nose' };
-const post = (m) => window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(m));
+const post = (m) => (window.ReactNativeWebView ? window.ReactNativeWebView.postMessage(JSON.stringify(m)) : window.parent.postMessage(JSON.stringify(m), '*'));
 const video = document.getElementById('v');
 let landmarker = null, stream = null, facing = 'user', lastTs = -1, lastPost = 0;
 

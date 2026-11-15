@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   Pressable,
@@ -13,7 +12,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
+import HtmlView from '../components/HtmlView';
+import { notify } from '../utils/dialog';
 import { Screen, Header, Card, Button, ProgressBar } from '../components/ui';
 import { searchFreeBooks, loadBookText, pickLocalPdfDocument } from '../services/bookFinder';
 import { paginateText, estimateReadingMinutes } from '../services/reading';
@@ -79,10 +79,10 @@ function ReadingSession({ doc, onClose }) {
     [doc.id],
   );
 
-  const onPdfMessage = (e) => {
+  const onPdfMessage = (data) => {
     let msg;
     try {
-      msg = JSON.parse(e.nativeEvent.data);
+      msg = JSON.parse(data);
     } catch {
       return;
     }
@@ -115,12 +115,7 @@ function ReadingSession({ doc, onClose }) {
 
       <View style={{ flex: 1 }} onTouchStart={markActivity}>
         {doc.kind === 'pdf' ? (
-          <WebView
-            source={{ html: pdfHtml, baseUrl: 'https://localhost/' }}
-            originWhitelist={['*']}
-            onMessage={onPdfMessage}
-            style={{ flex: 1, backgroundColor: colors.bg }}
-          />
+          <HtmlView html={pdfHtml} onMessage={onPdfMessage} style={{ flex: 1, backgroundColor: colors.bg }} />
         ) : (
           <ScrollView
             ref={scrollRef}
@@ -192,7 +187,7 @@ export default function ReaderScreen() {
       const text = await loadBookText(book);
       setDoc({ kind: 'text', ...book, pages: paginateText(text) });
     } catch (e) {
-      Alert.alert('Erreur', `Impossible d’ouvrir ce livre : ${e.message}`);
+      notify('Erreur', `Impossible d’ouvrir ce livre : ${e.message}`);
     } finally {
       setOpening(null);
     }
@@ -203,7 +198,7 @@ export default function ReaderScreen() {
       const pdf = await pickLocalPdfDocument();
       if (pdf) setDoc({ kind: 'pdf', ...pdf });
     } catch (e) {
-      Alert.alert('Erreur', `Import impossible : ${e.message}`);
+      notify('Erreur', `Import impossible : ${e.message}`);
     }
   };
 

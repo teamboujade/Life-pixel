@@ -55,6 +55,9 @@
           "motionPermission": "Le podomètre compte vos pas pendant la course."
         }
       ]
-    ]
+    ],
+    "experiments": {
+      "baseUrl": "/Life-pixel"
+    }
   }
 }

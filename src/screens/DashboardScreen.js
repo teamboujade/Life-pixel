@@ -1,11 +1,12 @@
 // Tableau de bord (section 12) + export des données (section 20).
 import React from 'react';
-import { Alert, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Screen, Header, Card, Button, Stat } from '../components/ui';
 import { useAppStore } from '../store/useAppStore';
 import { exportUserDataToJson, toCsv } from '../services/exportData';
 import { formatDuration } from '../utils/geometry';
 import { colors } from '../theme';
+import { notify, confirmDestructive } from '../utils/dialog';
 
 const isToday = (iso) => new Date(iso).toDateString() === new Date().toDateString();
 
@@ -24,15 +25,17 @@ export default function DashboardScreen() {
     try {
       await Share.share({ message, title });
     } catch (e) {
-      Alert.alert('Export impossible', e.message);
+      notify('Export impossible', e.message);
     }
   };
 
   const confirmReset = () =>
-    Alert.alert('Tout effacer ?', 'Toutes vos statistiques locales seront supprimées. Exportez-les d’abord si besoin.', [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Effacer', style: 'destructive', onPress: state.resetAll },
-    ]);
+    confirmDestructive(
+      'Tout effacer ?',
+      'Toutes vos statistiques locales seront supprimées. Exportez-les d’abord si besoin.',
+      'Effacer',
+      state.resetAll,
+    );
 
   return (
     <Screen>

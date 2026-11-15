@@ -1,7 +1,7 @@
 // Recherche de livres gratuits du domaine public (section 9) via Gutendex
 // (Project Gutenberg) — API publique, sans clé ni abonnement.
 import * as DocumentPicker from 'expo-document-picker';
-import { Directory, File, Paths } from 'expo-file-system';
+import { cachedText, pdfAssetToBase64, isBundledOnly } from './bookStorage';
 import { stripGutenbergBoilerplate } from './reading';
 
 const pickTextUrl = (formats) => {
@@ -27,7 +27,9 @@ const CLASSICS = [
   title,
   author,
   textUrl: `https://www.gutenberg.org/cache/epub/${id}/pg${id}.txt`,
-  coverUrl: `https://www.gutenberg.org/cache/epub/${id}/pg${id}.cover.medium.jpg`,
+  coverUrl: isBundledOnly
+    ? `books/gutenberg-${id}.jpg`
+    : `https://www.gutenberg.org/cache/epub/${id}/pg${id}.cover.medium.jpg`,
 }));
 
 const normalize = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -90,7 +92,7 @@ export async function pickLocalPdfDocument() {
   });
   if (result.canceled || !result.assets?.length) return null;
   const asset = result.assets[0];
-  const base64 = await new File(asset.uri).base64();
+  const base64 = await pdfAssetToBase64(asset);
   return {
     id: `pdf-${asset.name}-${asset.size ?? 0}`,
     title: asset.name.replace(/\.pdf$/i, ''),
@@ -98,20 +100,12 @@ export async function pickLocalPdfDocument() {
   };
 }
 
-// Cache local des livres téléchargés : relecture hors-ligne.
-
-function booksDir() {
-  const dir = new Directory(Paths.document, 'books');
-  if (!dir.exists) dir.create({ intermediates: true });
-  return dir;
-}
-
-const safeName = (id) => id.replace(/[^a-z0-9_-]/gi, '_');
-
+/** Texte du livre : cache local (ou fichier intégré sur web), sinon téléchargement. */
 export async function loadBookText(book) {
-  const file = new File(booksDir(), `${safeName(book.id)}.txt`);
-  if (file.exists) return file.text();
-  const text = await downloadBookText(book.textUrl);
-  await file.write(text);
-  return text;
+  if (isBundledOnly && !CLASSICS.some((c) => c.id === book.id)) {
+    throw new Error(
+      'Dans la version web, seuls les classiques intégrés peuvent être ouverts (gutenberg.org bloque la lecture depuis un navigateur). Utilisez l’application Android pour tout le catalogue.',
+    );
+  }
+  return cachedText(book.id, () => downloadBookText(book.textUrl));
 }

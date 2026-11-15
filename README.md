@@ -9,7 +9,12 @@ Application mobile 100 % gratuite, locale, sans compte ni abonnement, réalisée
 | **Course** | Podomètre natif + GPS (formule de Haversine), allure, écran maintenu allumé, historique |
 | **Lecture** | Livres libres de droits (Project Gutenberg / Gutendex), import de PDF, temps estimé, chronomètre de lecture active (pause automatique en arrière-plan ou après 2 min d'inactivité), vitesse de lecture qui s'ajuste |
 
-## Lancer l'application
+## Installer
+
+- **Android** : télécharger `Kineo.apk` depuis les [Releases](https://github.com/teamboujade/Life-pixel/releases), l'ouvrir sur le téléphone et autoriser l'installation depuis cette source.
+- **iPhone** : ouvrir https://teamboujade.github.io/Life-pixel/ dans **Safari**, puis Partager → « Sur l'écran d'accueil ». Dans la version iPhone, la bibliothèque propose les 10 classiques intégrés (gutenberg.org bloque la lecture depuis un navigateur) et le podomètre n'existe pas : la distance vient du GPS.
+
+## Lancer en développement
 
 Prérequis : Node.js 20 ou plus, et l'application **Expo Go** installée sur le téléphone.
 
@@ -25,6 +30,14 @@ Pour obtenir un APK autonome sans passer par Expo Go (compte Expo gratuit) :
 ```bash
 npx eas-cli@latest build -p android --profile preview
 ```
+
+## Publier la version web (GitHub Pages)
+
+```bash
+npx expo export --platform web --output-dir dist && touch dist/.nojekyll
+```
+
+Publiez ensuite le contenu de `dist/` sur la branche `gh-pages`.
 
 ## Tests
 

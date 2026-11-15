@@ -1,6 +1,6 @@
 // Module Sport 2 (sections 4 et 17) : podomètre natif + GPS (formule de Haversine).
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { Pedometer } from 'expo-sensors';
 import * as Location from 'expo-location';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -8,6 +8,7 @@ import { Screen, Header, Card, Button, Stat } from '../components/ui';
 import { calculateHaversineDistance, formatDuration, formatPace } from '../utils/geometry';
 import { useAppStore } from '../store/useAppStore';
 import { colors } from '../theme';
+import { notify } from '../utils/dialog';
 
 const STRIDE_M = 0.75; // foulée moyenne utilisée si le GPS est indisponible
 const MAX_ACCURACY_M = 30; // on ignore les relevés GPS trop imprécis
@@ -96,7 +97,7 @@ export default function RunningScreen() {
     setGpsOn(gps);
 
     if (!pedo && !gps) {
-      Alert.alert('Capteurs indisponibles', 'Autorisez la localisation ou l’activité physique pour suivre votre course.');
+      notify('Capteurs indisponibles', 'Autorisez la localisation ou l’activité physique pour suivre votre course.');
       return;
     }
     setIsTracking(true);

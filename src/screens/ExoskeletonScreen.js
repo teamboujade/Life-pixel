@@ -1,11 +1,11 @@
 // Module Sport 1 (sections 3, 8, 13–16) : coach virtuel par vision par ordinateur.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { useCameraPermissions } from 'expo-camera';
 import { useFocusEffect } from '@react-navigation/native';
 import { Screen, Header, Card, Button } from '../components/ui';
 import ExoskeletonOverlay from '../components/ExoskeletonOverlay';
+import HtmlView from '../components/HtmlView';
 import { EXERCISES } from '../services/exercises';
 import { POSE_HTML } from '../services/poseWebView';
 import { smoothKeypoints, formatDuration } from '../utils/geometry';
@@ -74,10 +74,10 @@ export default function ExoskeletonScreen() {
     ),
   );
 
-  const onMessage = (e) => {
+  const onMessage = (data) => {
     let msg;
     try {
-      msg = JSON.parse(e.nativeEvent.data);
+      msg = JSON.parse(data);
     } catch {
       return;
     }
@@ -111,17 +111,7 @@ export default function ExoskeletonScreen() {
     return (
       <Screen>
         <View style={s.cameraBox} onLayout={(e) => setBox(e.nativeEvent.layout)}>
-          <WebView
-            ref={webRef}
-            source={{ html: POSE_HTML, baseUrl: 'https://localhost/' }}
-            originWhitelist={['*']}
-            javaScriptEnabled
-            mediaPlaybackRequiresUserAction={false}
-            allowsInlineMediaPlayback
-            mediaCapturePermissionGrantType="grant"
-            onMessage={onMessage}
-            style={s.web}
-          />
+          <HtmlView ref={webRef} html={POSE_HTML} camera onMessage={onMessage} style={s.web} />
           <ExoskeletonOverlay
             keypoints={pose?.keypoints}
             videoW={pose?.w}

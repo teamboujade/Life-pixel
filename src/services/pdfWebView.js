@@ -18,7 +18,7 @@ export function buildPdfHtml(base64, startPage = 1) {
 <script type="module">
 import * as pdfjsLib from '${PDFJS}/pdf.min.mjs';
 pdfjsLib.GlobalWorkerOptions.workerSrc = '${PDFJS}/pdf.worker.min.mjs';
-const post = (m) => window.ReactNativeWebView.postMessage(JSON.stringify(m));
+const post = (m) => (window.ReactNativeWebView ? window.ReactNativeWebView.postMessage(JSON.stringify(m)) : window.parent.postMessage(JSON.stringify(m), '*'));
 
 function b64ToBytes(b64) {
   const bin = atob(b64); const out = new Uint8Array(bin.length);
