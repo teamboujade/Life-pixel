@@ -1,24 +1,60 @@
 {
   "expo": {
-    "name": "pixelio-free-ultimate",
-    "slug": "pixelio-free-ultimate",
+    "name": "Kinéo",
+    "slug": "kineo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kineo.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "La caméra détecte votre posture pour compter vos répétitions. Les images restent sur le téléphone.",
+        "NSMotionUsageDescription": "Le podomètre compte vos pas pendant la course.",
+        "NSLocationWhenInUseUsageDescription": "Le GPS mesure la distance de vos courses."
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0f172a",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "package": "com.kineo.app",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACTIVITY_RECOGNITION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "backgroundColor": "#0f172a",
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "La caméra détecte votre posture pour compter vos répétitions. Les images restent sur le téléphone.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Le GPS mesure la distance de vos courses."
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Le podomètre compte vos pas pendant la course."
+        }
+      ]
+    ]
   }
 }
