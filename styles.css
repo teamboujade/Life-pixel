@@ -139,4 +139,6 @@ select {
   font: inherit;
   width: 100%;
 }
+.mutations { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px 12px; margin: 14px 0 0; }
+.mutations legend { color: var(--text); font-weight: 700; padding: 0 6px; }
 [hidden] { display: none !important; }

@@ -1,19 +1,20 @@
-// Chorégraphie : la trajectoire de la balle est calculée à l'avance pour
-// qu'elle touche un anneau EXACTEMENT à l'instant de chaque note.
-// Chaque contact joue la note (ou l'accord) et casse l'anneau touché ;
-// la balle continue alors jusqu'à l'anneau suivant, un peu plus grand.
+// Chorégraphie : une ou plusieurs balles rebondissent dans UN cercle fermé.
+// Les trajectoires sont calculées à l'avance pour que chaque note du morceau
+// tombe EXACTEMENT sur un rebond. Mutations possibles à chaque rebond :
+// la balle grossit, se dédouble, change de couleur.
 
 export const DEFAULTS = Object.freeze({
   width: 1080,
   height: 1920,
-  innerRadius: 120,
-  outerRadius: 520,
-  gapAngle: 0.6,       // ouverture décorative des anneaux (rad)
-  rotationSpeed: 1.1,  // rotation des ouvertures (rad/s)
-  twist: 0.02,
-  ballRadius: 14,
-  gravity: 1400,       // px/s²
-  speed: 1300,         // vitesse visée de la balle (px/s)
+  radius: 470,          // rayon intérieur du cercle
+  ballRadius: 20,
+  gravity: 1400,
+  speed: 1300,          // vitesse visée (px/s)
+  grow: 0,              // px gagnés par rebond (0 = désactivé)
+  maxBallRadius: 170,
+  splitEvery: 0,        // une balle se dédouble tous les N rebonds (0 = jamais)
+  maxBalls: 32,
+  colorChange: true,    // la balle change de couleur à chaque rebond
   seed: 1,
 });
 
@@ -35,10 +36,7 @@ export function angleDiff(a, b) {
   return d;
 }
 
-/**
- * Regroupe les notes en « coups » : les notes qui démarrent presque en même
- * temps (accords) sont jouées par un seul rebond.
- */
+/** Regroupe les notes simultanées (accords) en un seul rebond. */
 export function groupNotes(notes, { merge = 0.045, start = 1, tempo = 1, maxDuration = Infinity } = {}) {
   const sorted = [...notes].sort((a, b) => a.time - b.time);
   if (!sorted.length) return [];
@@ -57,111 +55,135 @@ export function groupNotes(notes, { merge = 0.045, start = 1, tempo = 1, maxDura
 
 const G_LEVELS = [1, 0.55, 0.25, 0];
 const G_PENALTY = [0, 0.35, 0.7, 1.1];
+const MIN_DT = 0.03;
 
 export class Choreography {
   constructor(events, options = {}) {
     this.cfg = { ...DEFAULTS, ...options };
-    const c = this.cfg;
-    this.events_ = events;
-    this.times = events.map((e) => e.time);
-    const N = events.length;
-    this.rand = mulberry32(c.seed);
-    this.cx = c.width / 2;
-    this.cy = c.height / 2;
-    this.spacing = N > 1 ? (c.outerRadius - c.innerRadius) / (N - 1) : 0;
-    const base = this.rand() * Math.PI * 2;
-    this.rings = events.map((_, i) => ({
-      radius: c.innerRadius + i * this.spacing,
-      gapOffset: base + i * c.twist,
-      alive: true,
-      flash: 0,
-    }));
-    this.lastTime = N ? this.times[N - 1] : 0;
+    this.notes = events;
+    this.rand = mulberry32(this.cfg.seed);
+    this.cx = this.cfg.width / 2;
+    this.cy = this.cfg.height / 2;
+    this.lastTime = events.length ? events[events.length - 1].time : 0;
     this.endTime = this.lastTime + 3;
-    this.current = 0;
+    this.plan();
     this.time = 0;
+    this.cursor = 0; // prochain événement de la timeline
+    this.played = 0;
     this.finished = false;
     this.finishTime = null;
-    this.lastPassTime = -Infinity;
-    this.events = [];
-    this.ball = { x: this.cx, y: this.cy };
-    this.plan();
+    this.lastHitTime = -Infinity;
+    this.out = [];
   }
 
   get remaining() {
-    return this.rings.length - this.current;
+    return this.notes.length - this.played;
   }
 
-  gapCenter(i, t = this.time) {
-    return this.rings[i].gapOffset + this.cfg.rotationSpeed * t;
+  newBall(P, vin, t, r, hue) {
+    const b = { id: this.balls.length, P, vin, lastT: t, born: t, r, hue, hits: 0, segments: [] };
+    this.balls.push(b);
+    return b;
   }
 
-  /** Calcule un arc balistique par note, de contact en contact. */
   plan() {
     const c = this.cfg;
-    const N = this.rings.length;
-    this.segments = [];
-    let P = { x: this.cx, y: this.cy };
-    let vin = null;
-    let t0 = 0;
-    let prevSign = 1;
+    this.balls = [];
+    this.timeline = []; // { time, type: 'hit'|'spawn', ball, angle, notes?, r, hue }
+    this.newBall({ x: this.cx, y: this.cy }, null, 0, c.ballRadius, 0);
+    const N = this.notes.length;
     for (let i = 0; i < N; i++) {
-      const t1 = this.times[i];
-      const dt = Math.max(0.02, t1 - t0);
-      const R = this.rings[i].radius;
-      const Rc = R - c.ballRadius;
-      const gap = this.gapCenter(i, t1);
-      const gapHalf = c.gapAngle / 2 + c.ballRadius / R + 0.05;
-      const pAng = Math.atan2(P.y - this.cy, P.x - this.cx);
-      let best = null;
-      const K = 72;
-      for (let k = 0; k < K; k++) {
-        const ang = (k / K) * Math.PI * 2 + this.rand() * (Math.PI * 2 / K);
-        if (Math.abs(angleDiff(ang, gap)) < gapHalf) continue; // on ne tape pas dans le vide
-        const Q = { x: this.cx + Math.cos(ang) * Rc, y: this.cy + Math.sin(ang) * Rc };
-        for (let gl = 0; gl < G_LEVELS.length; gl++) {
-          const g = c.gravity * G_LEVELS[gl];
-          const vx = (Q.x - P.x) / dt;
-          const vy = (Q.y - P.y - 0.5 * g * dt * dt) / dt;
-          if (!this.insideArc(P, vx, vy, g, dt, Rc)) continue;
-          const speed = Math.hypot(vx, vy) || 1e-6;
-          let score = 2.5 * Math.abs(Math.log(speed / c.speed)) + G_PENALTY[gl];
-          if (vin) {
-            // rebond crédible : la sortie doit ressembler au reflet de l'entrée
-            const d = Math.hypot(P.x - this.cx, P.y - this.cy) || 1;
-            const nx = (P.x - this.cx) / d;
-            const ny = (P.y - this.cy) / d;
-            const vn = vin.x * nx + vin.y * ny;
-            const rx = vin.x - 2 * vn * nx;
-            const ry = vin.y - 2 * vn * ny;
-            const cos = (rx * vx + ry * vy) / ((Math.hypot(rx, ry) || 1) * speed);
-            score += 2.2 * Math.acos(Math.max(-1, Math.min(1, cos)));
-          } else {
-            score += 0.4 * Math.abs(angleDiff(ang, Math.PI / 2)); // 1er coup : plutôt vers le bas
-          }
-          const sign = Math.sign(angleDiff(ang, pAng)) || 1;
-          if (sign !== prevSign) score += 0.15;
-          if (!best || score < best.score) best = { score, Q, vx, vy, g, sign };
-          break; // la gravité la plus forte qui marche suffit
+      const t = this.notes[i].time;
+      // la balle libre depuis le plus longtemps prend la note
+      let b = this.balls[0];
+      for (const x of this.balls) if (x.lastT < b.lastT) b = x;
+      this.flyTo(b, t, this.notes[i].notes);
+      this.mutate(b, t);
+    }
+    // les balles qui ont fini avant les autres font des rebonds silencieux
+    for (const b of this.balls) {
+      while (this.lastTime - b.lastT > 0.6) this.flyTo(b, b.lastT + 0.45 + this.rand() * 0.2, null);
+      if (this.lastTime - b.lastT > MIN_DT) this.flyTo(b, this.lastTime, null);
+    }
+    this.timeline.sort((a, b) => a.time - b.time || (a.type === 'spawn') - (b.type === 'spawn'));
+  }
+
+  /** Calcule l'arc de la balle b jusqu'à un point du cercle à l'instant t1. */
+  flyTo(b, t1, notes) {
+    const c = this.cfg;
+    const P = b.P;
+    const dt = Math.max(MIN_DT, t1 - b.lastT);
+    const Rc = c.radius - b.r;
+    const vin = b.vin;
+    let best = null;
+    const K = 72;
+    for (let k = 0; k < K; k++) {
+      const ang = ((k + this.rand()) / K) * Math.PI * 2;
+      const Q = { x: this.cx + Math.cos(ang) * Rc, y: this.cy + Math.sin(ang) * Rc };
+      for (let gl = 0; gl < G_LEVELS.length; gl++) {
+        const g = c.gravity * G_LEVELS[gl];
+        const vx = (Q.x - P.x) / dt;
+        const vy = (Q.y - P.y - 0.5 * g * dt * dt) / dt;
+        if (!this.insideArc(P, vx, vy, g, dt, Rc)) continue;
+        const speed = Math.hypot(vx, vy) || 1e-6;
+        let score = 2.5 * Math.abs(Math.log(speed / (c.speed * Math.max(0.35, Rc / (c.radius - c.ballRadius))))) + G_PENALTY[gl];
+        if (vin) {
+          const d = Math.hypot(P.x - this.cx, P.y - this.cy) || 1;
+          const nx = (P.x - this.cx) / d;
+          const ny = (P.y - this.cy) / d;
+          const vn = vin.x * nx + vin.y * ny;
+          const rx = vin.x - 2 * vn * nx;
+          const ry = vin.y - 2 * vn * ny;
+          const cos = (rx * vx + ry * vy) / ((Math.hypot(rx, ry) || 1) * speed);
+          score += 2.2 * Math.acos(Math.max(-1, Math.min(1, cos)));
+        } else {
+          score += 0.4 * Math.abs(angleDiff(ang, Math.PI / 2));
         }
+        if (!best || score < best.score) best = { score, Q, vx, vy, g, ang };
+        break;
       }
-      if (!best) {
-        // secours : ligne droite vers le point opposé (toujours dans le disque)
-        const ang = pAng + Math.PI;
-        const Q = { x: this.cx + Math.cos(ang) * Rc, y: this.cy + Math.sin(ang) * Rc };
-        best = { Q, vx: (Q.x - P.x) / dt, vy: (Q.y - P.y) / dt, g: 0, sign: prevSign };
-      }
-      this.segments.push({ t0, t1, x0: P.x, y0: P.y, vx: best.vx, vy: best.vy, g: best.g });
-      vin = { x: best.vx, y: best.vy + best.g * dt };
-      P = best.Q;
-      prevSign = best.sign;
-      t0 = t1;
+    }
+    if (!best) {
+      const pa = Math.atan2(P.y - this.cy, P.x - this.cx) + Math.PI;
+      const Q = { x: this.cx + Math.cos(pa) * Rc, y: this.cy + Math.sin(pa) * Rc };
+      best = { Q, vx: (Q.x - P.x) / dt, vy: (Q.y - P.y) / dt, g: 0, ang: pa };
+    }
+    const t0 = t1 - dt;
+    b.segments.push({ t0, t1, x0: P.x, y0: P.y, vx: best.vx, vy: best.vy, g: best.g, r: b.r, hue: b.hue });
+    b.vin = { x: best.vx, y: best.vy + best.g * dt };
+    b.P = best.Q;
+    b.lastT = t1;
+    b.lastAng = best.ang;
+    this.timeline.push({ time: t1, type: 'hit', ball: b.id, angle: best.ang, notes, r: b.r, hue: b.hue });
+  }
+
+  mutate(b, t) {
+    const c = this.cfg;
+    b.hits++;
+    if (c.colorChange) b.hue = (b.hue + 1) % 12;
+    if (c.grow > 0 && b.r < c.maxBallRadius) {
+      b.r = Math.min(c.maxBallRadius, b.r + c.grow);
+      // la balle gonfle vers l'intérieur : on recule son centre
+      const Rc = c.radius - b.r;
+      b.P = { x: this.cx + Math.cos(b.lastAng) * Rc, y: this.cy + Math.sin(b.lastAng) * Rc };
+    }
+    if (c.splitEvery > 0 && b.hits % c.splitEvery === 0 && this.balls.length < c.maxBalls) {
+      // la copie part en miroir (composante tangentielle inversée)
+      const nx = Math.cos(b.lastAng);
+      const ny = Math.sin(b.lastAng);
+      const vn = b.vin.x * nx + b.vin.y * ny;
+      const tx = b.vin.x - vn * nx;
+      const ty = b.vin.y - vn * ny;
+      const vin = { x: vn * nx - tx, y: vn * ny - ty };
+      const clone = this.newBall({ ...b.P }, vin, t, b.r, (b.hue + 6) % 12);
+      clone.lastAng = b.lastAng;
+      this.timeline.push({ time: t, type: 'spawn', ball: clone.id, parent: b.id, angle: b.lastAng, r: b.r, hue: clone.hue });
     }
   }
 
   insideArc(P, vx, vy, g, dt, Rc) {
-    const S = 14;
-    const lim = (Rc + 0.5) * (Rc + 0.5);
+    const S = Math.max(14, Math.ceil(dt * 60)); // plus de points pour les longs arcs
+    const lim = (Rc + 0.25) * (Rc + 0.25);
     for (let s = 1; s < S; s++) {
       const t = (s / S) * dt;
       const x = P.x + vx * t - this.cx;
@@ -171,9 +193,15 @@ export class Choreography {
     return true;
   }
 
-  positionAt(t) {
-    const segs = this.segments;
-    if (!segs.length) return { x: this.cx, y: this.cy };
+  /** État d'une balle à l'instant t : position, rayon, teinte (null si pas encore née). */
+  ballAt(b, t) {
+    if (t < b.born) return null;
+    const segs = b.segments;
+    if (!segs.length) return { x: b.P.x, y: b.P.y, r: b.r, hue: b.hue };
+    if (t >= segs[segs.length - 1].t1) {
+      const s = segs[segs.length - 1];
+      return { x: b.P.x, y: b.P.y, r: b.r, hue: b.hue, end: true, last: s };
+    }
     let lo = 0;
     let hi = segs.length - 1;
     while (lo < hi) {
@@ -182,49 +210,42 @@ export class Choreography {
       else hi = mid;
     }
     const s = segs[lo];
-    const tau = Math.max(0, Math.min(t, s.t1) - s.t0);
-    return { x: s.x0 + s.vx * tau, y: s.y0 + s.vy * tau + 0.5 * s.g * tau * tau };
+    const tau = Math.max(0, t - s.t0);
+    return { x: s.x0 + s.vx * tau, y: s.y0 + s.vy * tau + 0.5 * s.g * tau * tau, r: s.r, hue: s.hue };
   }
 
   advanceTo(t) {
     const dt = Math.max(0, t - this.time);
     this.time = t;
-    for (const r of this.rings) if (r.flash > 0) r.flash = Math.max(0, r.flash - dt * 4);
-    while (this.current < this.rings.length && this.times[this.current] <= t) {
-      const i = this.current;
-      const p = this.positionAt(this.times[i]);
-      const ring = this.rings[i];
-      ring.alive = false;
-      this.events.push({
-        type: 'pass',
-        ring: i,
-        angle: Math.atan2(p.y - this.cy, p.x - this.cx),
-        radius: ring.radius,
-        time: this.times[i],
-        notes: this.events_[i].notes,
-      });
-      this.lastPassTime = this.times[i];
-      this.current++;
+    while (this.cursor < this.timeline.length && this.timeline[this.cursor].time <= t) {
+      const e = this.timeline[this.cursor++];
+      if (e.type === 'hit' && e.notes) {
+        this.played++;
+        this.lastHitTime = e.time;
+      }
+      this.out.push(e);
     }
-    if (!this.finished && this.current >= this.rings.length && t >= this.lastTime) {
+    if (!this.finished && t >= this.lastTime && this.played >= this.notes.length) {
       this.finished = true;
       this.finishTime = t;
-      this.events.push({ type: 'finish', time: t });
+      this.out.push({ type: 'finish', time: t });
     }
-    if (this.finished) {
-      const k = 1 - Math.exp(-dt * 3);
-      this.ball.x += (this.cx - this.ball.x) * k;
-      this.ball.y += (this.cy - this.ball.y) * k;
-    } else {
-      const p = this.positionAt(t);
-      this.ball.x = p.x;
-      this.ball.y = p.y;
-    }
+    // positions courantes
+    const k = 1 - Math.exp(-dt * 3);
+    this.state = this.balls.map((b) => {
+      const s = this.ballAt(b, t);
+      if (!s) return null;
+      if (this.finished) {
+        const prev = this.state?.[b.id] || s;
+        return { ...s, x: prev.x + (this.cx - prev.x) * k, y: prev.y + (this.cy - prev.y) * k };
+      }
+      return s;
+    });
   }
 
   drainEvents() {
-    const e = this.events;
-    this.events = [];
+    const e = this.out;
+    this.out = [];
     return e;
   }
 }

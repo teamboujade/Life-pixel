@@ -38,10 +38,17 @@ function buildEvents() {
 }
 
 function options() {
+  const num = (id) => Number($(id).value);
   return {
-    gravity: Number($('gravity').value),
-    speed: Number($('speed').value),
-    seed: Math.max(1, Math.round(Number($('seed').value)) || 1),
+    gravity: num('gravity'),
+    speed: num('speed'),
+    seed: Math.max(1, Math.round(num('seed')) || 1),
+    ballRadius: num('ballRadius'),
+    grow: $('growOn').checked ? num('grow') : 0,
+    maxBallRadius: Math.max(num('maxBallRadius'), num('ballRadius')),
+    splitEvery: $('splitOn').checked ? Math.max(1, Math.round(num('splitEvery')) || 1) : 0,
+    maxBalls: Math.max(2, Math.min(128, Math.round(num('maxBalls')) || 32)),
+    colorChange: $('colorChange').checked,
   };
 }
 
@@ -49,9 +56,10 @@ function refresh() {
   if (running) return;
   const events = song ? buildEvents() : groupNotes(DEMO_SONGS[0].tracks[0].notes);
   const ch = new Choreography(events, options());
+  ch.advanceTo(0);
   renderer.reset(ch);
   renderer.title = $('title').value;
-  renderer.draw(0, false);
+  renderer.draw(0);
   if (song) {
     const notes = events.reduce((n, e) => n + e.notes.length, 0);
     setStatus(`${song.title} : ${events.length} rebonds (${notes} notes), vidéo de ${fmt(ch.endTime)}.`);
@@ -100,7 +108,8 @@ $('tempo').addEventListener('input', () => {
   $('tempoVal').textContent = `×${Number($('tempo').value).toFixed(2).replace(/\.?0+$/, '')}`;
   refresh();
 });
-for (const id of ['maxDuration', 'merge', 'gravity', 'speed', 'seed', 'title']) $(id).addEventListener('input', refresh);
+for (const id of ['maxDuration', 'merge', 'gravity', 'speed', 'seed', 'title', 'ballRadius', 'grow', 'maxBallRadius', 'splitEvery', 'maxBalls']) $(id).addEventListener('input', refresh);
+for (const id of ['growOn', 'splitOn', 'colorChange']) $(id).addEventListener('change', refresh);
 
 $('preview').addEventListener('click', () => run(false));
 $('record').addEventListener('click', () => run(true));
@@ -172,7 +181,7 @@ async function run(record) {
     renderer.onEvents(ch.drainEvents());
     const lv = synth.levels();
     renderer.setAudioData(lv.freq, lv.wave, lv.level);
-    renderer.draw(dt, t - ch.lastPassTime < 0.12);
+    renderer.draw(dt);
     $('bar').style.width = `${Math.min(100, (t / ch.endTime) * 100)}%`;
     if (t >= ch.endTime) {
       finish();

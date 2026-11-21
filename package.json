@@ -1,7 +1,7 @@
 {
   "name": "ring-escape",
   "version": "1.0.0",
-  "description": "Générateur de vidéos : une balle rebondit dans des anneaux et chaque rebond joue une note.",
+  "description": "Générateur de vidéos : des balles rebondissent dans un cercle et chaque rebond joue une note, avec mutations.",
   "type": "module",
   "private": true,
   "scripts": {

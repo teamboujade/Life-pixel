@@ -1,248 +1,173 @@
-// Rendu Canvas 2D : anneaux, balle, particules, compteur et final visualiseur.
+// Rendu Canvas 2D : un cercle lumineux, les balles, leurs traînées,
+// les étincelles à chaque note et le final visualiseur.
 
-const PALETTE = ['#ff3fa4', '#c04dff', '#7a4dff', '#ff4fd8', '#ff8a2a', '#ffb52e', '#ff5f6d'];
+const HUES = ['#ff3fa4', '#ff5f6d', '#ff8a2a', '#ffb52e', '#ffe14d', '#8dff6a', '#2ee6c8', '#38b6ff', '#5b6bff', '#9b4dff', '#c04dff', '#ff4fd8'];
 
-function hexToRgb(hex) {
+function rgb(hex) {
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
-
-const PALETTE_RGB = PALETTE.map(hexToRgb);
-
-/** Couleur d'un anneau : dégradé cyclique rose → violet → orange. */
-export function ringColor(i, period = 34) {
-  const x = (i / period) % PALETTE_RGB.length;
-  const a = PALETTE_RGB[Math.floor(x)];
-  const b = PALETTE_RGB[(Math.floor(x) + 1) % PALETTE_RGB.length];
-  const f = x - Math.floor(x);
-  const s = f * f * (3 - 2 * f);
-  return [0, 1, 2].map((k) => Math.round(a[k] + (b[k] - a[k]) * s));
-}
+const HUES_RGB = HUES.map(rgb);
 
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.particles = [];
-    this.trail = [];
     this.title = '';
-    this.freq = null;
-    this.wave = null;
-    this.pulse = 0;
-    this.shake = 0;
+    this.level = 0;
   }
 
   reset(sim) {
     this.sim = sim;
     this.canvas.width = sim.cfg.width;
     this.canvas.height = sim.cfg.height;
-    // couleur selon le rayon → bandes rose / violet / orange visibles quelle que soit la densité
-    this.colors = sim.rings.map((r) => ringColor(r.radius / 2.2));
-    // anneaux décoratifs (non physiques) pour remplir tout l'écran
-    const c = sim.cfg;
-    const maxR = Math.hypot(c.width / 2, c.height / 2) + 20;
-    const step = Math.max(sim.spacing || 3, 2.6);
-    const base = sim.rings[0] ? sim.rings[0].gapOffset : 0;
-    this.decor = [];
-    for (let r = c.outerRadius + step; r < maxR; r += step) {
-      const idx = (r - c.innerRadius) / (sim.spacing || step);
-      this.decor.push({ radius: r, gapOffset: base + idx * c.twist, color: ringColor(r / 2.2) });
-    }
     this.particles = [];
-    this.trail = [];
+    this.trails = new Map();
+    this.ripples = [];
     this.pulse = 0;
-    this.finaleStart = null;
     this.flash = 0;
+    this.shake = 0;
+    this.finaleStart = null;
+    this.ringHue = 0;
+    this.beat = 0;
   }
 
   onEvents(events) {
-    const sim = this.sim;
+    const { sim } = this;
+    const R = sim.cfg.radius;
     for (const e of events) {
-      if (e.type === 'pass') {
-        const [r, g, b] = this.colors[e.ring];
-        const n = 14;
+      if (e.type === 'hit' || e.type === 'spawn') {
+        const [r, g, b] = HUES_RGB[e.hue % 12];
+        const px = sim.cx + Math.cos(e.angle) * R;
+        const py = sim.cy + Math.sin(e.angle) * R;
+        const n = e.type === 'spawn' ? 26 : e.notes ? 12 : 4;
         for (let k = 0; k < n; k++) {
-          const a = e.angle + (Math.random() - 0.5) * 0.9;
-          const sp = 120 + Math.random() * 420;
-          this.particles.push({
-            x: sim.cx + Math.cos(e.angle) * e.radius,
-            y: sim.cy + Math.sin(e.angle) * e.radius,
-            vx: Math.cos(a) * sp,
-            vy: Math.sin(a) * sp,
-            life: 0.5 + Math.random() * 0.5,
-            age: 0,
-            size: 2 + Math.random() * 3.5,
-            color: `${r},${g},${b}`,
-          });
+          const a = e.angle + Math.PI + (Math.random() - 0.5) * 2.2;
+          const sp = 150 + Math.random() * 520;
+          this.particles.push({ x: px, y: py, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.4 + Math.random() * 0.5, age: 0, size: 2 + Math.random() * 3.5, color: `${r},${g},${b}` });
         }
-        this.pulse = Math.min(1, this.pulse + 0.35);
-      } else if (e.type === 'bounce') {
-        this.shake = Math.min(1, this.shake + 0.25);
+        if (e.notes) {
+          this.ripples.push({ angle: e.angle, age: 0, color: `${r},${g},${b}` });
+          this.pulse = Math.min(1, this.pulse + 0.3);
+          this.ringHue = e.hue;
+        }
+        if (e.type === 'spawn') this.shake = Math.min(1, this.shake + 0.5);
       } else if (e.type === 'finish') {
         this.finaleStart = e.time;
-        this.flash = 1;
-        this.shake = 1;
-        for (let k = 0; k < 160; k++) {
+        this.flash = 0.8;
+        for (let k = 0; k < 180; k++) {
           const a = Math.random() * Math.PI * 2;
           const sp = 200 + Math.random() * 900;
-          this.particles.push({
-            x: sim.ball.x, y: sim.ball.y,
-            vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-            life: 0.8 + Math.random() * 0.8, age: 0, size: 2 + Math.random() * 4,
-            color: this.colors[k % this.colors.length].join(','),
-          });
+          const [r, g, b] = HUES_RGB[k % 12];
+          this.particles.push({ x: sim.cx, y: sim.cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.8 + Math.random() * 0.8, age: 0, size: 2 + Math.random() * 4, color: `${r},${g},${b}` });
         }
       }
     }
   }
 
   setAudioData(freq, wave, level) {
-    this.pulseBeat = Math.max((this.pulseBeat || 0) * 0.85, Math.max(0, level - (this.level || 0)) * 6);
+    this.beat = Math.max(this.beat * 0.85, Math.max(0, level - this.level) * 6);
     this.freq = freq;
     this.wave = wave;
     this.level = level;
   }
 
-  draw(dt, open) {
+  draw(dt) {
     const { ctx, sim } = this;
     const { width: W, height: H } = sim.cfg;
-    const level = this.level || 0;
-    this.pulse = Math.max(0, this.pulse - dt * 2.2);
-    this.shake = Math.max(0, this.shake - dt * 5);
+    this.pulse = Math.max(0, this.pulse - dt * 2.5);
+    this.shake = Math.max(0, this.shake - dt * 4);
 
     ctx.save();
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
-
-    // halo de fond
+    const [hr, hg, hb] = HUES_RGB[this.ringHue % 12];
     const glow = ctx.createRadialGradient(sim.cx, sim.cy, 0, sim.cx, sim.cy, H * 0.6);
-    glow.addColorStop(0, `rgba(120,40,160,${0.10 + 0.25 * this.pulse})`);
+    glow.addColorStop(0, `rgba(${hr},${hg},${hb},${0.06 + 0.2 * this.pulse})`);
     glow.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
 
-    const sx = (Math.random() - 0.5) * 6 * this.shake;
-    const sy = (Math.random() - 0.5) * 6 * this.shake;
-    ctx.translate(sx, sy);
+    ctx.translate((Math.random() - 0.5) * 10 * this.shake, (Math.random() - 0.5) * 10 * this.shake);
 
-    this.drawDecor(level, open);
-    if (!sim.finished) this.drawRings(level, open);
-    else this.drawFinale(dt);
-
+    if (sim.finished) this.drawFinale();
+    this.drawRing(dt);
     this.drawParticles(dt);
-    this.drawBall();
+    this.drawBalls();
     this.drawTexts();
     ctx.restore();
 
-    // éclair blanc au déclenchement du moment fort
     if (this.flash > 0) {
-      ctx.fillStyle = `rgba(255,255,255,${0.85 * this.flash * this.flash})`;
+      ctx.fillStyle = `rgba(255,255,255,${this.flash * this.flash})`;
       ctx.fillRect(0, 0, W, H);
       this.flash = Math.max(0, this.flash - dt * 1.8);
     }
   }
 
-  drawDecor(level, open) {
+  drawRing(dt) {
     const { ctx, sim } = this;
-    const c = sim.cfg;
-    let alpha = 0.5 + 0.3 * Math.min(1, level * 2.2) + (open ? 0.1 : 0);
-    if (sim.finished) alpha *= Math.max(0, 1 - (sim.time - (this.finaleStart ?? sim.time)) / 1.2);
-    if (alpha <= 0.01) return;
-    const half = c.gapAngle / 2;
-    const rot = c.rotationSpeed * sim.time;
-    ctx.lineWidth = Math.max(1, Math.max(sim.spacing || 3, 2.6) * 0.62);
-    for (const d of this.decor) {
-      const g = d.gapOffset + rot;
-      const [r, gr, b] = d.color;
-      ctx.strokeStyle = `rgba(${r},${gr},${b},${alpha})`;
+    const R = sim.cfg.radius;
+    let alpha = 1;
+    if (sim.finished) alpha = Math.max(0, 1 - (sim.time - this.finaleStart) / 1.2);
+    if (alpha <= 0) return;
+    // anneau dégradé qui tourne lentement
+    const rot = sim.time * 0.4;
+    const grad = ctx.createConicGradient ? ctx.createConicGradient(rot, sim.cx, sim.cy) : null;
+    if (grad) HUES.forEach((h, i) => grad.addColorStop(i / HUES.length, h)), grad.addColorStop(1, HUES[0]);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = `rgba(255,255,255,${0.5 + this.pulse * 0.5})`;
+    ctx.shadowBlur = 20 + 30 * this.pulse;
+    ctx.strokeStyle = grad || '#ff3fa4';
+    ctx.lineWidth = 10 + 6 * this.pulse;
+    ctx.beginPath();
+    ctx.arc(sim.cx, sim.cy, R + 5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // éclats sur le cercle à l'endroit des impacts
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const alive = [];
+    for (const rp of this.ripples) {
+      rp.age += dt;
+      if (rp.age > 0.45) continue;
+      const a = 1 - rp.age / 0.45;
+      const spread = 0.12 + rp.age * 0.9;
+      ctx.strokeStyle = `rgba(${rp.color},${a})`;
+      ctx.lineWidth = 16 * a + 4;
       ctx.beginPath();
-      ctx.arc(sim.cx, sim.cy, d.radius, g + half, g - half + Math.PI * 2);
+      ctx.arc(sim.cx, sim.cy, R + 5, rp.angle - spread, rp.angle + spread);
       ctx.stroke();
+      alive.push(rp);
     }
+    this.ripples = alive.slice(-200);
+    ctx.restore();
   }
 
-  drawRings(level, open) {
+  drawFinale() {
     const { ctx, sim } = this;
-    const c = sim.cfg;
-    const half = c.gapAngle / 2;
-    // avec des milliers de notes, les anneaux sont trop serrés : on n'en dessine qu'une partie
-    const stride = Math.max(1, Math.round(1.2 / Math.max(sim.spacing, 1e-3)));
-    const lw = Math.max(1, sim.spacing * stride * 0.62);
-    const bright = 0.62 + 0.38 * Math.min(1, level * 2.2) + (open ? 0.12 : 0);
-    ctx.lineWidth = lw;
-    ctx.lineCap = 'butt';
-    for (let i = sim.rings.length - 1; i >= sim.current; i--) {
-      if (stride > 1 && i % stride && i !== sim.current) continue;
-      const ring = sim.rings[i];
-      const g = sim.gapCenter(i);
-      const [r, gr, b] = this.colors[i];
-      const f = ring.flash;
-      const mix = (v) => Math.round(v + (255 - v) * f * 0.85);
-      const fade = i === sim.current ? 1 : Math.max(0.55, 1 - (i - sim.current) / 900);
-      ctx.strokeStyle = `rgba(${mix(r)},${mix(gr)},${mix(b)},${Math.min(1, bright * fade)})`;
-      ctx.beginPath();
-      ctx.arc(sim.cx, sim.cy, ring.radius, g + half, g - half + Math.PI * 2);
-      ctx.stroke();
-    }
-    // liseré lumineux de l'anneau intérieur
-    const inner = sim.rings[sim.current];
-    if (inner) {
-      const g = sim.gapCenter(sim.current);
-      ctx.save();
-      ctx.shadowColor = 'rgba(255,255,255,0.9)';
-      ctx.shadowBlur = 18;
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(sim.cx, sim.cy, inner.radius, g + half, g - half + Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
-  }
-
-  drawFinale(dt) {
-    const { ctx, sim } = this;
-    const freq = this.freq;
-    const t = sim.time - (this.finaleStart ?? sim.time);
+    const t = sim.time - this.finaleStart;
     const appear = Math.min(1, t / 1.2);
-    const R = 190;
-    if (freq) {
+    const R = 200;
+    if (this.freq) {
       const bars = 120;
-      const usable = Math.floor(freq.length * 0.7);
+      const usable = Math.floor(this.freq.length * 0.42);
       ctx.lineCap = 'round';
       ctx.lineWidth = 7;
       for (let k = 0; k < bars; k++) {
-        const m = k < bars / 2 ? k : bars - 1 - k; // symétrie
-        const idx = Math.floor((m / (bars / 2)) * usable * 0.6);
-        const v = freq[idx] / 255;
-        const len = (20 + v * v * 380 + this.pulseBeat * 60) * appear;
+        const m = k < bars / 2 ? k : bars - 1 - k;
+        const v = this.freq[Math.floor((m / (bars / 2)) * usable)] / 255;
+        const len = (16 + v * v * 380 + this.beat * 60) * appear;
         const a = (k / bars) * Math.PI * 2 - Math.PI / 2;
-        const [r, g, b] = ringColor(k * 3);
+        const [r, g, b] = HUES_RGB[Math.floor(k / 10) % 12];
         ctx.strokeStyle = `rgba(${r},${g},${b},0.95)`;
         ctx.beginPath();
-        ctx.moveTo(sim.cx + Math.cos(a) * (R + 12), sim.cy + Math.sin(a) * (R + 12));
-        ctx.lineTo(sim.cx + Math.cos(a) * (R + 12 + len), sim.cy + Math.sin(a) * (R + 12 + len));
+        ctx.moveTo(sim.cx + Math.cos(a) * R, sim.cy + Math.sin(a) * R);
+        ctx.lineTo(sim.cx + Math.cos(a) * (R + len), sim.cy + Math.sin(a) * (R + len));
         ctx.stroke();
       }
     }
-    // cercle ondulé (forme d'onde)
-    ctx.save();
-    ctx.shadowColor = '#fff';
-    ctx.shadowBlur = 14;
-    ctx.strokeStyle = `rgba(255,255,255,${0.9 * appear})`;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    const N = 180;
-    for (let k = 0; k <= N; k++) {
-      const a = (k / N) * Math.PI * 2;
-      const w = this.wave ? (this.wave[Math.floor((k % N) / N * this.wave.length)] - 128) / 128 : 0;
-      const rr = R + w * 40 * appear;
-      const x = sim.cx + Math.cos(a) * rr;
-      const y = sim.cy + Math.sin(a) * rr;
-      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-    ctx.restore();
   }
 
   drawParticles(dt) {
@@ -264,57 +189,73 @@ export class Renderer {
       ctx.fill();
       alive.push(p);
     }
-    this.particles = alive.length > 2500 ? alive.slice(-2500) : alive;
+    this.particles = alive.length > 3000 ? alive.slice(-3000) : alive;
     ctx.restore();
   }
 
-  drawBall() {
+  drawBalls() {
     const { ctx, sim } = this;
-    const b = sim.ball;
-    const r = sim.cfg.ballRadius * (sim.finished ? 1.6 : 1);
-    this.trail.push({ x: b.x, y: b.y });
-    if (this.trail.length > 14) this.trail.shift();
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    this.trail.forEach((p, i) => {
-      const a = (i / this.trail.length) * 0.35;
-      ctx.fillStyle = `rgba(255,190,60,${a})`;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r * (0.4 + 0.6 * i / this.trail.length), 0, Math.PI * 2);
-      ctx.fill();
-    });
-    ctx.restore();
+    const states = sim.state || [];
+    const many = states.filter(Boolean).length > 12;
+    states.forEach((s, id) => {
+      if (!s) return;
+      const [r, g, b] = HUES_RGB[s.hue % 12];
+      let trail = this.trails.get(id);
+      if (!trail) this.trails.set(id, (trail = []));
+      trail.push({ x: s.x, y: s.y, r: s.r });
+      if (trail.length > (many ? 6 : 12)) trail.shift();
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      trail.forEach((p, i) => {
+        const a = (i / trail.length) * 0.3;
+        ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * (0.35 + 0.65 * i / trail.length), 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.restore();
 
-    ctx.save();
-    ctx.shadowColor = 'rgba(255,190,40,1)';
-    ctx.shadowBlur = 40;
-    const g = ctx.createRadialGradient(b.x - r * 0.3, b.y - r * 0.3, r * 0.1, b.x, b.y, r);
-    g.addColorStop(0, '#fffbe0');
-    g.addColorStop(0.45, '#ffd23f');
-    g.addColorStop(1, '#e08a00');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+      ctx.save();
+      if (!many) {
+        ctx.shadowColor = `rgb(${r},${g},${b})`;
+        ctx.shadowBlur = 30;
+      }
+      const grad = ctx.createRadialGradient(s.x - s.r * 0.3, s.y - s.r * 0.35, s.r * 0.1, s.x, s.y, s.r);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.35, `rgb(${Math.min(255, r + 60)},${Math.min(255, g + 60)},${Math.min(255, b + 60)})`);
+      grad.addColorStop(1, `rgb(${r >> 1},${g >> 1},${b >> 1})`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
   }
 
   drawTexts() {
     const { ctx, sim } = this;
     const W = sim.cfg.width;
+    const top = sim.cy - sim.cfg.radius;
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#fff';
     ctx.shadowColor = 'rgba(0,0,0,0.8)';
     ctx.shadowBlur = 12;
-    if (!sim.finished) {
-      ctx.font = '800 96px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(String(sim.remaining), sim.cx, sim.cy);
-    }
+    const font = (w, s) => `${w} ${s}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
     if (this.title) {
-      ctx.font = '700 64px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
-      wrapText(ctx, this.title, W / 2, 260, W - 140, 76);
+      ctx.font = font(800, 66);
+      wrapText(ctx, this.title, W / 2, top - 250, W - 140, 78);
+    }
+    const balls = (sim.state || []).filter(Boolean).length;
+    ctx.font = font(800, 92);
+    ctx.fillText(`♪ ${sim.remaining}`, W / 2, top - 100);
+    if (sim.cfg.splitEvery > 0 || sim.cfg.grow > 0) {
+      ctx.font = font(700, 48);
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      const bottom = sim.cy + sim.cfg.radius;
+      const info = sim.cfg.splitEvery > 0 ? `${balls} balle${balls > 1 ? 's' : ''}` : `taille ×${((sim.state?.[0]?.r || sim.cfg.ballRadius) / sim.cfg.ballRadius).toFixed(1)}`;
+      ctx.fillText(info, W / 2, bottom + 110);
     }
     ctx.restore();
   }

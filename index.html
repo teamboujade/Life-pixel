@@ -12,7 +12,7 @@
     <section class="panel">
       <header>
         <h1>Ring Escape</h1>
-        <p class="lead">Chaque rebond de la balle joue une note du morceau, pile en rythme : à la fin, tu as entendu toute la musique.</p>
+        <p class="lead">Une balle dans un cercle : chaque rebond joue une note du morceau, pile en rythme. Ajoute des mutations : elle grossit, elle se dédouble…</p>
       </header>
 
       <label class="file">
@@ -40,9 +40,23 @@
         <label>Durée max (s) <input id="maxDuration" type="number" min="5" step="1" value="60"></label>
       </div>
 
+      <fieldset class="mutations">
+        <legend>Mutations</legend>
+        <div class="grid">
+          <label class="check"><input id="growOn" type="checkbox"> La balle grossit à chaque rebond</label>
+          <label>Croissance par rebond (px) <input id="grow" type="range" min="0.5" max="12" step="0.5" value="2"></label>
+          <label>Taille max <input id="maxBallRadius" type="range" min="40" max="320" step="10" value="170"></label>
+          <label class="check"><input id="splitOn" type="checkbox"> La balle se dédouble</label>
+          <label>Se dédouble tous les N rebonds <input id="splitEvery" type="number" min="1" max="50" value="4"></label>
+          <label>Nombre max de balles <input id="maxBalls" type="number" min="2" max="128" value="32"></label>
+          <label class="check"><input id="colorChange" type="checkbox" checked> Change de couleur à chaque rebond</label>
+        </div>
+      </fieldset>
+
       <details>
         <summary>Réglages avancés</summary>
         <div class="grid">
+          <label>Taille de départ de la balle <input id="ballRadius" type="range" min="8" max="60" step="1" value="20"></label>
           <label>Gravité <input id="gravity" type="range" min="0" max="3000" step="50" value="1400"></label>
           <label>Vitesse de la balle <input id="speed" type="range" min="500" max="2600" step="50" value="1300"></label>
           <label>Regrouper les notes (ms) <input id="merge" type="range" min="10" max="150" step="5" value="45"></label>
