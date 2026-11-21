@@ -153,6 +153,20 @@ export class Simulation {
     }
   }
 
+  /** Termine la partie immédiatement (filet de sécurité pour tomber pile sur le moment fort). */
+  forceFinish() {
+    if (this.finished) return;
+    for (let i = this.current; i < this.rings.length; i++) {
+      this.rings[i].alive = false;
+      this.events.push({ type: 'pass', ring: i, angle: Math.atan2(this.ball.y - this.cy, this.ball.x - this.cx), radius: this.rings[i].radius, time: this.time });
+    }
+    this.current = this.rings.length;
+    this.lastPassTime = this.time;
+    this.finished = true;
+    this.finishTime = this.time;
+    this.events.push({ type: 'finish', time: this.time });
+  }
+
   /** Avance jusqu'au temps t (en secondes) par pas fixes. */
   advanceTo(t) {
     while (this.time + STEP <= t) this.step(STEP);
@@ -180,7 +194,7 @@ export function finishTime(options, maxTime) {
  * Cherche un nombre d'anneaux et une graine pour que la balle détruise le
  * dernier anneau juste avant `targetTime` (laisse place au final).
  */
-export function calibrate(options, targetTime, { minRings = 40, maxRings = 700, tolerance = 2.5, budgetMs = 4000 } = {}) {
+export function calibrate(options, targetTime, { minRings = 6, maxRings = 700, tolerance = 0.6, budgetMs = 5000 } = {}) {
   const start = Date.now();
   const base = { ...DEFAULTS, ...options };
   let best = { rings: base.rings, seed: base.seed, finish: null, error: Infinity };

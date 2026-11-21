@@ -125,3 +125,20 @@ canvas {
 }
 
 .download[hidden] { display: none; }
+
+.wave-box { margin: 0 0 14px; }
+#wave {
+  width: 100%;
+  height: 70px;
+  aspect-ratio: auto;
+  max-width: none;
+  border-radius: 8px;
+  background: #0c0b12;
+  box-shadow: none;
+  cursor: crosshair;
+}
+.wave-legend { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; }
+.dot.drop { background: var(--accent2); }
+.dot.seg { background: var(--accent); }
+[hidden] { display: none !important; }

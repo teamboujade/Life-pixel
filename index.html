@@ -20,13 +20,20 @@
         <span id="fileLabel">Choisir une musique…</span>
       </label>
 
+      <div class="wave-box" id="waveBox" hidden>
+        <canvas id="wave" width="760" height="120"></canvas>
+        <p class="wave-legend"><span class="dot drop"></span> moment fort · <span class="dot seg"></span> passage utilisé — <em>touche la courbe pour déplacer le moment fort</em></p>
+      </div>
+
       <div class="grid">
+        <label class="check"><input id="useHighlight" type="checkbox" checked> Caler la vidéo sur le moment fort de la musique</label>
         <label>Titre affiché <input id="title" type="text" placeholder="(optionnel)"></label>
-        <label>Début du morceau (s) <input id="start" type="number" min="0" step="0.5" value="0"></label>
-        <label>Durée de la vidéo (s) <input id="duration" type="number" min="5" step="1" placeholder="tout le morceau"></label>
-        <label class="check"><input id="autoFit" type="checkbox" checked> Finir les anneaux juste avant la fin</label>
+        <label>Durée de la vidéo (s) <input id="duration" type="number" min="10" step="1" value="60"></label>
+        <label class="hl">Moment fort à fond pendant (s) <input id="climax" type="number" min="3" step="1" value="15"></label>
+        <label class="nohl" hidden>Début du morceau (s) <input id="start" type="number" min="0" step="0.5" value="0"></label>
         <label>Nombre d'anneaux <input id="rings" type="number" min="5" max="700" value="200"></label>
         <label>Graine (variante) <input id="seed" type="number" min="1" value="1"></label>
+        <label class="check nohl" hidden><input id="autoFit" type="checkbox" checked> Finir les anneaux juste avant la fin</label>
       </div>
 
       <details>
@@ -36,6 +43,7 @@
           <label>Vitesse de rotation <input id="rotationSpeed" type="range" min="0.2" max="3" step="0.05" value="1.1"></label>
           <label>Gravité <input id="gravity" type="range" min="0" max="3000" step="50" value="1500"></label>
           <label>Rebond (vitesse) <input id="minBounceSpeed" type="range" min="400" max="1600" step="20" value="820"></label>
+          <label>Puissance du moment fort <input id="climaxBoost" type="range" min="1" max="3" step="0.1" value="1.8"></label>
           <label>Volume étouffé <input id="muffledGain" type="range" min="0" max="1" step="0.05" value="0.35"></label>
           <label>Étouffement (filtre Hz) <input id="muffledCutoff" type="range" min="150" max="3000" step="50" value="450"></label>
           <label>Maintien du son ouvert (s) <input id="hold" type="range" min="0.05" max="1.5" step="0.05" value="0.3"></label>

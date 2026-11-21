@@ -52,6 +52,7 @@ export class Renderer {
     this.trail = [];
     this.pulse = 0;
     this.finaleStart = null;
+    this.flash = 0;
   }
 
   onEvents(events) {
@@ -79,6 +80,8 @@ export class Renderer {
         this.shake = Math.min(1, this.shake + 0.25);
       } else if (e.type === 'finish') {
         this.finaleStart = e.time;
+        this.flash = 1;
+        this.shake = 1;
         for (let k = 0; k < 160; k++) {
           const a = Math.random() * Math.PI * 2;
           const sp = 200 + Math.random() * 900;
@@ -94,6 +97,7 @@ export class Renderer {
   }
 
   setAudioData(freq, wave, level) {
+    this.pulseBeat = Math.max((this.pulseBeat || 0) * 0.85, Math.max(0, level - (this.level || 0)) * 6);
     this.freq = freq;
     this.wave = wave;
     this.level = level;
@@ -129,6 +133,13 @@ export class Renderer {
     this.drawBall();
     this.drawTexts();
     ctx.restore();
+
+    // éclair blanc au déclenchement du moment fort
+    if (this.flash > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${0.85 * this.flash * this.flash})`;
+      ctx.fillRect(0, 0, W, H);
+      this.flash = Math.max(0, this.flash - dt * 1.8);
+    }
   }
 
   drawDecor(level, open) {
@@ -201,7 +212,7 @@ export class Renderer {
         const m = k < bars / 2 ? k : bars - 1 - k; // symétrie
         const idx = Math.floor((m / (bars / 2)) * usable * 0.6);
         const v = freq[idx] / 255;
-        const len = (20 + v * v * 330) * appear;
+        const len = (20 + v * v * 380 + this.pulseBeat * 60) * appear;
         const a = (k / bars) * Math.PI * 2 - Math.PI / 2;
         const [r, g, b] = ringColor(k * 3);
         ctx.strokeStyle = `rgba(${r},${g},${b},0.95)`;

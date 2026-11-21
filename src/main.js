@@ -2,15 +2,20 @@ import { Simulation, calibrate, DEFAULTS } from './simulation.js';
 import { Renderer } from './renderer.js';
 import { AudioEngine } from './audio.js';
 import { VideoRecorder } from './recorder.js';
+import { analyzeEnergy, findHighlight, planSegment } from './analysis.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('canvas');
 const renderer = new Renderer(canvas);
 const audio = new AudioEngine();
-const FINALE_SECONDS = 5; // durée du final (visualiseur) après le dernier anneau
+const FINALE_SECONDS = 5; // sans moment fort : durée du final après le dernier anneau
 
 let running = null; // { stop() }
 let fileName = '';
+let analysis = null; // { curve, hop, time }
+let dropTime = null; // moment fort choisi (s dans le morceau)
+
+const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 function settings() {
   const num = (id) => Number($(id).value);
@@ -24,12 +29,25 @@ function settings() {
   };
 }
 
-function segment() {
+const useHighlight = () => $('useHighlight').checked && dropTime !== null;
+
+/** Passage de la musique à utiliser + instant (relatif) où la balle doit finir. */
+function plan() {
   const total = audio.duration;
+  const wanted = Number($('duration').value) || 60;
+  if (useHighlight()) {
+    const climax = Math.max(3, Number($('climax').value) || 15);
+    const p = planSegment(total, dropTime, { videoDuration: wanted, climax });
+    return { ...p, finishAt: p.dropAt, highlight: true };
+  }
   const start = Math.min(Math.max(0, Number($('start').value) || 0), Math.max(0, total - 1));
-  const wanted = Number($('duration').value);
-  const duration = wanted > 0 ? Math.min(wanted, total - start) : total - start;
-  return { start, duration };
+  const duration = Math.min(wanted, total - start);
+  return {
+    start,
+    duration,
+    finishAt: $('autoFit').checked ? Math.max(3, duration - FINALE_SECONDS) : null,
+    highlight: false,
+  };
 }
 
 function setStatus(text) {
@@ -41,6 +59,54 @@ function setBusy(busy) {
   $('record').disabled = busy || !audio.buffer;
   $('stop').disabled = !busy;
 }
+
+function syncModeFields() {
+  const hl = $('useHighlight').checked;
+  document.querySelectorAll('.hl').forEach((el) => (el.hidden = !hl));
+  document.querySelectorAll('.nohl').forEach((el) => (el.hidden = hl));
+  drawWave();
+}
+
+function drawWave() {
+  const c = $('wave');
+  if (!analysis) return;
+  const ctx = c.getContext('2d');
+  const W = c.width;
+  const H = c.height;
+  const total = audio.duration;
+  ctx.clearRect(0, 0, W, H);
+  const p = audio.buffer ? plan() : null;
+  if (p) {
+    ctx.fillStyle = 'rgba(255,63,164,0.18)';
+    ctx.fillRect((p.start / total) * W, 0, (p.duration / total) * W, H);
+  }
+  const { curve } = analysis;
+  const per = curve.length / W;
+  for (let x = 0; x < W; x++) {
+    let m = 0;
+    for (let i = Math.floor(x * per); i < Math.floor((x + 1) * per); i++) m = Math.max(m, curve[i] || 0);
+    const h = Math.min(1, m) * (H - 8);
+    const t = (x / W) * total;
+    const inSeg = p && t >= p.start && t <= p.start + p.duration;
+    const afterDrop = useHighlight() && t >= dropTime && inSeg;
+    ctx.fillStyle = afterDrop ? '#ffb52e' : inSeg ? '#ff6fbf' : '#4a4060';
+    ctx.fillRect(x, H - h, 1, h);
+  }
+  if (useHighlight()) {
+    const x = (dropTime / total) * W;
+    ctx.fillStyle = '#ffb52e';
+    ctx.fillRect(x - 1.5, 0, 3, H);
+  }
+}
+
+$('wave').addEventListener('click', (e) => {
+  if (!analysis || running) return;
+  const r = e.target.getBoundingClientRect();
+  dropTime = ((e.clientX - r.left) / r.width) * audio.duration;
+  $('useHighlight').checked = true;
+  syncModeFields();
+  setStatus(`Moment fort déplacé à ${fmt(dropTime)}.`);
+});
 
 function drawIdle() {
   const sim = new Simulation(settings());
@@ -54,18 +120,28 @@ $('audioFile').addEventListener('change', async (e) => {
   if (!file) return;
   fileName = file.name.replace(/\.[^.]+$/, '');
   $('fileLabel').textContent = file.name;
-  setStatus('Décodage de la musique…');
+  setStatus('Décodage et analyse de la musique…');
   try {
-    await audio.load(file);
-    setStatus(`Musique chargée (${audio.duration.toFixed(1)} s). Lance une prévisualisation ou génère la vidéo.`);
+    const buf = await audio.load(file);
+    await new Promise((r) => setTimeout(r, 20));
+    const channels = Array.from({ length: buf.numberOfChannels }, (_, i) => buf.getChannelData(i));
+    const h = findHighlight(analyzeEnergy(channels, buf.sampleRate));
+    analysis = h;
+    dropTime = h.time;
+    $('waveBox').hidden = false;
+    syncModeFields();
+    setStatus(`Musique chargée (${fmt(audio.duration)}). Moment fort détecté à ${fmt(dropTime)}.`);
     setBusy(false);
   } catch (err) {
     console.error(err);
-    setStatus("Impossible de lire ce fichier audio. Essaie un MP3, M4A ou WAV.");
+    setStatus('Impossible de lire ce fichier audio. Essaie un MP3, M4A ou WAV.');
   }
 });
 
 for (const id of ['rings', 'seed', 'gapAngle', 'title']) $(id).addEventListener('input', () => !running && drawIdle());
+for (const id of ['duration', 'climax', 'start']) $(id).addEventListener('input', drawWave);
+$('useHighlight').addEventListener('change', syncModeFields);
+$('autoFit').addEventListener('change', drawWave);
 
 $('preview').addEventListener('click', () => run(false));
 $('record').addEventListener('click', () => run(true));
@@ -73,21 +149,24 @@ $('stop').addEventListener('click', () => running?.stop());
 
 async function run(record) {
   if (running || !audio.buffer) return;
-  const { start, duration } = segment();
+  const p = plan();
   const opts = settings();
   audio.muffledGain = Number($('muffledGain').value);
   audio.muffledCutoff = Number($('muffledCutoff').value);
+  audio.climaxBoost = Number($('climaxBoost').value);
   const hold = Number($('hold').value);
 
-  if ($('autoFit').checked) {
-    setStatus('Calcul du nombre d\'anneaux pour coller à la durée…');
+  // facteur de vitesse pour que le dernier anneau casse pile au bon moment
+  let timeScale = 1;
+  if (p.finishAt !== null) {
+    setStatus('Calcul de la partie pour tomber pile sur le bon moment…');
     await new Promise((r) => setTimeout(r, 30));
-    const target = Math.max(3, duration - FINALE_SECONDS);
-    const best = calibrate(opts, target);
+    const best = calibrate(opts, p.finishAt);
     opts.rings = best.rings;
     opts.seed = best.seed;
     $('rings').value = best.rings;
     $('seed').value = best.seed;
+    if (best.finish) timeScale = Math.min(1.15, Math.max(0.85, best.finish / p.finishAt));
   }
 
   const sim = new Simulation(opts);
@@ -96,7 +175,7 @@ async function run(record) {
   setBusy(true);
   $('download').hidden = true;
 
-  const t0 = await audio.play(start, duration);
+  const t0 = await audio.play(p.start, p.duration);
   audio.setMonitor(true);
   let recorder = null;
   if (record) {
@@ -139,15 +218,18 @@ async function run(record) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     const t = Math.max(0, audio.ctx.currentTime - t0);
-    sim.advanceTo(t);
+    sim.advanceTo(t * timeScale);
+    // filet de sécurité : le moment fort démarre toujours à l'heure
+    if (p.highlight && t >= p.finishAt && !sim.finished) sim.forceFinish();
     renderer.onEvents(sim.drainEvents());
-    const open = sim.finished || t - sim.lastPassTime < hold;
-    audio.setOpen(open);
+    const passing = t * timeScale - sim.lastPassTime < hold;
+    const state = sim.finished ? (p.highlight ? 'climax' : 'open') : passing ? 'open' : 'muffled';
+    audio.setState(state);
     const lv = audio.levels();
     renderer.setAudioData(lv.freq, lv.wave, lv.level);
-    renderer.draw(dt, open);
-    $('bar').style.width = `${Math.min(100, (t / duration) * 100)}%`;
-    if (t >= duration) {
+    renderer.draw(dt, state !== 'muffled');
+    $('bar').style.width = `${Math.min(100, (t / p.duration) * 100)}%`;
+    if (t >= p.duration) {
       finish();
       return;
     }
@@ -156,4 +238,5 @@ async function run(record) {
   raf = requestAnimationFrame(frame);
 }
 
+syncModeFields();
 drawIdle();

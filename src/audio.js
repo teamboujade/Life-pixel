@@ -8,6 +8,7 @@ export class AudioEngine {
     this.source = null;
     this.muffledCutoff = 450;
     this.muffledGain = 0.35;
+    this.climaxBoost = 1.8; // gain du moment fort (le limiteur évite la saturation)
   }
 
   ensureContext() {
@@ -24,10 +25,18 @@ export class AudioEngine {
       this.analyser.smoothingTimeConstant = 0.75;
       this.streamDest = ctx.createMediaStreamDestination();
       this.monitor = ctx.createGain();
+      // limiteur : permet de pousser le volume au moment fort sans saturer
+      this.limiter = ctx.createDynamicsCompressor();
+      this.limiter.threshold.value = -6;
+      this.limiter.knee.value = 4;
+      this.limiter.ratio.value = 20;
+      this.limiter.attack.value = 0.003;
+      this.limiter.release.value = 0.15;
       this.filter.connect(this.gain);
-      this.gain.connect(this.analyser);
-      this.gain.connect(this.streamDest);
-      this.gain.connect(this.monitor);
+      this.gain.connect(this.limiter);
+      this.limiter.connect(this.analyser);
+      this.limiter.connect(this.streamDest);
+      this.limiter.connect(this.monitor);
       this.monitor.connect(ctx.destination);
       this.freq = new Uint8Array(this.analyser.frequencyBinCount);
       this.wave = new Uint8Array(this.analyser.fftSize);
@@ -46,11 +55,13 @@ export class AudioEngine {
     return this.buffer ? this.buffer.duration : 0;
   }
 
-  setOpen(open, instant = false) {
+  /** state : 'muffled' (étouffé), 'open' (passage d'anneau) ou 'climax' (moment fort à fond). */
+  setState(state, instant = false) {
     const ctx = this.ctx;
     const now = ctx.currentTime;
+    const open = state !== 'muffled';
     const f = open ? 20000 : this.muffledCutoff;
-    const g = open ? 1 : this.muffledGain;
+    const g = state === 'climax' ? this.climaxBoost : open ? 0.9 : this.muffledGain;
     if (instant) {
       this.filter.frequency.setValueAtTime(f, now);
       this.gain.gain.setValueAtTime(g, now);
@@ -72,7 +83,7 @@ export class AudioEngine {
     this.source = ctx.createBufferSource();
     this.source.buffer = this.buffer;
     this.source.connect(this.filter);
-    this.setOpen(false, true);
+    this.setState('muffled', true);
     const t0 = ctx.currentTime + 0.1;
     this.source.start(t0, offset, duration);
     return t0;
