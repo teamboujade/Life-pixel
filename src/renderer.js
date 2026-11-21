@@ -42,7 +42,7 @@ export class Renderer {
     const c = sim.cfg;
     const maxR = Math.hypot(c.width / 2, c.height / 2) + 20;
     const step = Math.max(sim.spacing || 3, 2.6);
-    const base = sim.rings[0].gapOffset;
+    const base = sim.rings[0] ? sim.rings[0].gapOffset : 0;
     this.decor = [];
     for (let r = c.outerRadius + step; r < maxR; r += step) {
       const idx = (r - c.innerRadius) / (sim.spacing || step);
@@ -165,11 +165,14 @@ export class Renderer {
     const { ctx, sim } = this;
     const c = sim.cfg;
     const half = c.gapAngle / 2;
-    const lw = Math.max(1, sim.spacing * 0.62);
+    // avec des milliers de notes, les anneaux sont trop serrés : on n'en dessine qu'une partie
+    const stride = Math.max(1, Math.round(1.2 / Math.max(sim.spacing, 1e-3)));
+    const lw = Math.max(1, sim.spacing * stride * 0.62);
     const bright = 0.62 + 0.38 * Math.min(1, level * 2.2) + (open ? 0.12 : 0);
     ctx.lineWidth = lw;
     ctx.lineCap = 'butt';
     for (let i = sim.rings.length - 1; i >= sim.current; i--) {
+      if (stride > 1 && i % stride && i !== sim.current) continue;
       const ring = sim.rings[i];
       const g = sim.gapCenter(i);
       const [r, gr, b] = this.colors[i];

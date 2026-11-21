@@ -124,21 +124,19 @@ canvas {
   canvas { height: auto; width: 100%; max-height: 70vh; width: auto; }
 }
 
-.download[hidden] { display: none; }
 
-.wave-box { margin: 0 0 14px; }
-#wave {
-  width: 100%;
-  height: 70px;
-  aspect-ratio: auto;
-  max-width: none;
-  border-radius: 8px;
+button.ghost { width: 100%; margin-bottom: 14px; background: transparent; }
+.tracks { margin-bottom: 14px; }
+.tracks label { display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 3px 0; }
+.small { font-size: 13px; color: var(--muted); margin: 0 0 4px; }
+.val { color: var(--text); }
+select {
   background: #0c0b12;
-  box-shadow: none;
-  cursor: crosshair;
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  width: 100%;
 }
-.wave-legend { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
-.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; }
-.dot.drop { background: var(--accent2); }
-.dot.seg { background: var(--accent); }
 [hidden] { display: none !important; }

@@ -1,7 +1,7 @@
 {
   "name": "ring-escape",
   "version": "1.0.0",
-  "description": "Générateur de vidéos : une balle rebondit à travers des anneaux au rythme de ta musique.",
+  "description": "Générateur de vidéos : une balle rebondit dans des anneaux et chaque rebond joue une note.",
   "type": "module",
   "private": true,
   "scripts": {
