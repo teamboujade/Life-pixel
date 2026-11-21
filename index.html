@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Ring Escape</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <section class="panel">
+      <header>
+        <h1>Ring Escape</h1>
+        <p class="lead">Mets une musique : la balle rebondit dans les anneaux. Le son est étouffé quand elle rebondit, et s'ouvre quand elle passe à travers un anneau.</p>
+      </header>
+
+      <label class="file">
+        <input id="audioFile" type="file" accept="audio/*,video/*">
+        <span id="fileLabel">Choisir une musique…</span>
+      </label>
+
+      <div class="grid">
+        <label>Titre affiché <input id="title" type="text" placeholder="(optionnel)"></label>
+        <label>Début du morceau (s) <input id="start" type="number" min="0" step="0.5" value="0"></label>
+        <label>Durée de la vidéo (s) <input id="duration" type="number" min="5" step="1" placeholder="tout le morceau"></label>
+        <label class="check"><input id="autoFit" type="checkbox" checked> Finir les anneaux juste avant la fin</label>
+        <label>Nombre d'anneaux <input id="rings" type="number" min="5" max="700" value="200"></label>
+        <label>Graine (variante) <input id="seed" type="number" min="1" value="1"></label>
+      </div>
+
+      <details>
+        <summary>Réglages avancés</summary>
+        <div class="grid">
+          <label>Taille de l'ouverture <input id="gapAngle" type="range" min="0.45" max="1.4" step="0.01" value="0.75"></label>
+          <label>Vitesse de rotation <input id="rotationSpeed" type="range" min="0.2" max="3" step="0.05" value="1.1"></label>
+          <label>Gravité <input id="gravity" type="range" min="0" max="3000" step="50" value="1500"></label>
+          <label>Rebond (vitesse) <input id="minBounceSpeed" type="range" min="400" max="1600" step="20" value="820"></label>
+          <label>Volume étouffé <input id="muffledGain" type="range" min="0" max="1" step="0.05" value="0.35"></label>
+          <label>Étouffement (filtre Hz) <input id="muffledCutoff" type="range" min="150" max="3000" step="50" value="450"></label>
+          <label>Maintien du son ouvert (s) <input id="hold" type="range" min="0.05" max="1.5" step="0.05" value="0.3"></label>
+        </div>
+      </details>
+
+      <div class="buttons">
+        <button id="preview" disabled>▶ Prévisualiser</button>
+        <button id="record" class="primary" disabled>● Générer la vidéo</button>
+        <button id="stop" disabled>■ Stop</button>
+      </div>
+      <p id="status" class="status">Charge une musique pour commencer.</p>
+      <div class="progress"><div id="bar"></div></div>
+      <a id="download" class="download" hidden>⬇ Télécharger la vidéo</a>
+      <p class="hint">La vidéo s'enregistre en temps réel : garde l'onglet ouvert et au premier plan pendant la génération.</p>
+    </section>
+
+    <section class="stage">
+      <canvas id="canvas" width="1080" height="1920"></canvas>
+    </section>
+  </main>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

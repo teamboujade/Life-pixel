@@ -1,46 +1,12 @@
 {
-  "name": "kineo",
+  "name": "ring-escape",
   "version": "1.0.0",
-  "main": "index.js",
-  "dependencies": {
-    "@react-native-async-storage/async-storage": "2.2.0",
-    "@react-navigation/bottom-tabs": "^7.22.0",
-    "@react-navigation/native": "^7.5.2",
-    "expo": "~58.0.25",
-    "expo-camera": "~58.0.14",
-    "expo-document-picker": "~58.0.5",
-    "expo-file-system": "~58.0.13",
-    "expo-keep-awake": "~58.0.4",
-    "expo-location": "~58.0.22",
-    "expo-sensors": "~58.0.5",
-    "expo-status-bar": "~58.0.5",
-    "expo-system-ui": "~58.0.7",
-    "jest": "~30.5.2",
-    "jest-expo": "~58.0.14",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
-    "react-native": "0.88.1",
-    "react-native-safe-area-context": "~5.11.1",
-    "react-native-screens": "~4.30.1",
-    "react-native-svg": "15.16.0",
-    "react-native-web": "^0.21.4",
-    "react-native-webview": "14.0.1",
-    "zustand": "^5.1.0"
-  },
-  "scripts": {
-    "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
-    "web": "expo start --web",
-    "test": "jest",
-    "lint": "expo lint"
-  },
+  "description": "Générateur de vidéos : une balle rebondit à travers des anneaux au rythme de ta musique.",
+  "type": "module",
   "private": true,
-  "jest": {
-    "preset": "jest-expo"
+  "scripts": {
+    "start": "npx --yes serve -l 5173 .",
+    "test": "node --test tests/*.test.js"
   },
-  "devDependencies": {
-    "eslint": "^9.0.0",
-    "eslint-config-expo": "~58.0.4"
-  }
+  "license": "MIT"
 }
